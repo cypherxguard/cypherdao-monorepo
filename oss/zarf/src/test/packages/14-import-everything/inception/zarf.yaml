@@ -1,0 +1,16 @@
+kind: ZarfPackageConfig
+metadata:
+  name: importception
+  description: Test nearly every type of skeleton import
+  version: 0.0.1
+
+components:
+  - name: file-imports
+    required: true
+    import:
+      url: oci://localhost:31888/import-everything:0.0.1
+
+  - name: local-chart-import
+    required: true
+    import:
+      url: oci://localhost:31888/import-everything:0.0.1

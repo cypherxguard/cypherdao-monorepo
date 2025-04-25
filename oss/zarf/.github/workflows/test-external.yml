@@ -1,0 +1,65 @@
+name: Test External Git & Registry
+on:
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "**.jpg"
+      - "**.png"
+      - "**.gif"
+      - "**.svg"
+      - "adr/**"
+      - "docs/**"
+      - "CODEOWNERS"
+  merge_group:
+    paths-ignore:
+      - "**.md"
+      - "**.jpg"
+      - "**.png"
+      - "**.gif"
+      - "**.svg"
+      - "adr/**"
+      - "docs/**"
+      - "CODEOWNERS"
+
+permissions:
+  contents: read
+
+# Abort prior jobs in the same workflow / PR
+concurrency:
+  group: e2e-external-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-external:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup golang
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build binary and zarf packages
+        uses: ./.github/actions/packages
+        with:
+          init-package: "false"
+          build-examples: "false"
+
+      - name: Setup k3d
+        uses: ./.github/actions/k3d
+
+      - name: Cleanup files
+        uses: ./.github/actions/cleanup-files
+
+      - name: Run external service test
+        run: make test-external
+
+      - name: get cluster info
+        uses: ./.github/actions/debug-cluster
+        if: always()
+
+      - name: Save logs
+        if: always()
+        uses: ./.github/actions/save-logs

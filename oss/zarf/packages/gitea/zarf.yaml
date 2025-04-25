@@ -1,0 +1,95 @@
+kind: ZarfPackageConfig
+metadata:
+  name: init-package-git-server
+
+variables:
+  - name: GIT_SERVER_EXISTING_PVC
+    description: "Optional: Use an existing PVC for the git server instead of creating a new one. If this is set, the GIT_SERVER_PVC_SIZE variable will be ignored."
+    default: "data-zarf-gitea-0"
+
+  - name: GIT_SERVER_PVC_SIZE
+    description: The size of the persistent volume claim for the git server
+    default: 10Gi
+
+  - name: GIT_SERVER_PVC_ACCESS_MODE
+    description: The access mode of the persistent volume claim for the git server
+    default: ReadWriteOnce
+
+  - name: GIT_SERVER_CPU_REQ
+    description: The CPU request for git server
+    default: 200m
+
+  - name: GIT_SERVER_MEM_REQ
+    description: The memory request for git server
+    default: 512Mi
+
+  - name: GIT_SERVER_CPU_LIMIT
+    description: The CPU limit for git server
+    default: "3"
+
+  - name: GIT_SERVER_MEM_LIMIT
+    description: The memory limit for git server
+    default: 2Gi
+
+  - name: GIT_SERVER_REPLICA_COUNT
+    description: The number of git server replicas to deploy
+    default: "1"
+
+  - name: GIT_SERVER_DISABLE_REGISTRATION
+    description: Disables the ability to register new users
+    default: "true"
+
+constants:
+  - name: GITEA_IMAGE
+    value: "###ZARF_PKG_TMPL_GITEA_IMAGE###"
+
+components:
+  - name: git-server
+    description: |
+      Deploys Gitea to provide git repositories for Kubernetes configurations.
+      Required for GitOps deployments if no other git server is available.
+    images:
+      - "###ZARF_PKG_TMPL_GITEA_IMAGE###"
+    manifests:
+      - name: git-connect
+        namespace: zarf
+        files:
+          - connect.yaml
+    charts:
+      - name: gitea
+        releaseName: zarf-gitea
+        url: https://dl.gitea.io/charts
+        version: 10.1.1
+        namespace: zarf
+        valuesFiles:
+          - gitea-values.yaml
+    actions:
+      onDeploy:
+        before:
+          - cmd: ./zarf internal update-gitea-pvc
+            setVariables:
+              - name: GIT_SERVER_CREATE_PVC
+            mute: true
+        after:
+          - cmd: ./zarf internal create-read-only-gitea-user
+            maxRetries: 3
+            maxTotalSeconds: 60
+            description: Create the read-only Gitea user
+          - cmd: ./zarf internal create-artifact-registry-token
+            maxRetries: 3
+            maxTotalSeconds: 60
+            description: Create an artifact registry token
+
+        onFailure:
+          - cmd: ./zarf internal update-gitea-pvc --rollback
+
+# YAML keys starting with `x-` are custom keys that are ignored by the Zarf CLI
+x-mdx: |
+  The default setup for this package is to use a `rootless` image, specified in `gitea-values.yaml`. Because the gitea helm chart does its own appending of `-rootless` to the image tag, based on the `rootless` helm value, users don't need to supply the full image tag when overriding the default gitea image. Instead you need to use the `GITEA_SERVER_VERSION`, either in the zarf-config.toml or with `--set`.
+
+  _Make sure, though, that the `x.x.x-rootless` tag does exist for Zarf to find._
+
+  ```bash
+  $ zarf package create . --set GITEA_IMAGE="custom.enterprise.corp/ironbank/opensource/gitea" \
+    --set GITEA_SERVER_VERSION="v1.19.3"
+  ```

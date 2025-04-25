@@ -1,0 +1,12 @@
+kind: ZarfPackageConfig
+metadata:
+  name: dos-games-images
+  description: Simple example to test the various ways you can specify image references.
+
+components:
+  - name: baseline
+    required: true
+    images:
+      - ghcr.io/zarf-dev/doom-game:0.0.1
+      - ghcr.io/zarf-dev/doom-game:0.0.1@sha256:0a44b759e219d9d6f3c7cbbf40c57ede71a1f9bf54da65767c4137be74727662
+      - ghcr.io/zarf-dev/doom-game@sha256:0a44b759e219d9d6f3c7cbbf40c57ede71a1f9bf54da65767c4137be74727662

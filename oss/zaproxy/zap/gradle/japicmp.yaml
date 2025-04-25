@@ -1,0 +1,10 @@
+# Exclusions for japicmp.
+#
+# Any binary incompatible changes deemed acceptable should be added to this file.
+---
+packageExcludes: []
+fieldExcludes: []
+classExcludes:
+  - "org.parosproxy.paros.core.scanner.VariantAbstractRPCQuery$RPCParameter"
+  - "org.parosproxy.paros.core.scanner.VariantJSONQuery$SimpleStringReader"
+methodExcludes: []

@@ -1,0 +1,266 @@
+name: Test Cross-Cluster
+on:
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "**.jpg"
+      - "**.png"
+      - "**.gif"
+      - "**.svg"
+      - "adr/**"
+      - "docs/**"
+      - "CODEOWNERS"
+  merge_group:
+    paths-ignore:
+      - "**.md"
+      - "**.jpg"
+      - "**.png"
+      - "**.gif"
+      - "**.svg"
+      - "adr/**"
+      - "docs/**"
+      - "CODEOWNERS"
+
+permissions:
+  contents: read
+
+# Abort prior jobs in the same workflow / PR
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Build the binary and init package
+  build-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup golang
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build binary and zarf packages
+        uses: ./.github/actions/packages
+        with:
+          build-examples: "false"
+
+      # Upload the contents of the build directory for later stages to use
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: build-artifacts
+          path: build/
+          retention-days: 1
+
+  validate-without-cluster:
+    runs-on: ubuntu-latest
+    needs: build-e2e
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
+        with:
+          name: build-artifacts
+          path: build/
+
+      - name: Setup golang
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: Make Zarf executable
+        run: |
+          chmod +x build/zarf
+
+      # Before we run the regular tests we need to aggressively cleanup files to reduce disk pressure
+      - name: Cleanup files
+        uses: ./.github/actions/cleanup-files
+
+      - name: Run tests
+        run: |
+          make test-e2e-without-cluster ARCH=amd64
+
+      - name: Save logs
+        if: always()
+        uses: ./.github/actions/save-logs
+        with:
+          suffix: -validate-without-cluster
+
+  # Run the tests on k3d
+  validate-k3d:
+    runs-on: ubuntu-latest
+    needs: build-e2e
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
+        with:
+          name: build-artifacts
+          path: build/
+
+      - name: Setup golang
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: Setup K3d
+        uses: ./.github/actions/k3d
+
+      - name: Make Zarf executable
+        run: |
+          chmod +x build/zarf
+
+      # Before we run the regular tests we need to aggressively cleanup files to reduce disk pressure
+      - name: Cleanup files
+        uses: ./.github/actions/cleanup-files
+
+      - name: Run tests
+        run: |
+          make test-e2e-with-cluster ARCH=amd64
+
+      - name: get cluster info
+        uses: ./.github/actions/debug-cluster
+        if: always()
+
+      - name: Save logs
+        if: always()
+        uses: ./.github/actions/save-logs
+        with:
+          suffix: -validate-k3d
+
+  # Run the tests on k3s
+  validate-k3s:
+    runs-on: ubuntu-latest
+    needs: build-e2e
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
+        with:
+          name: build-artifacts
+          path: build/
+
+      - name: Setup golang
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: Make Zarf executable
+        run: |
+          chmod +x build/zarf
+
+      # Before we run the regular tests we need to aggressively cleanup files to reduce disk pressure
+      - name: Cleanup files
+        uses: ./.github/actions/cleanup-files
+
+      - name: Run tests
+        # NOTE: "PATH=$PATH" preserves the default user $PATH. This is needed to maintain the version of go installed
+        #       in a previous step. This test run will use Zarf to create a K3s cluster, and a brand new cluster will be
+        #       used for each test
+        run: |
+          sudo env "PATH=$PATH" CI=true APPLIANCE_MODE=true make test-e2e-with-cluster ARCH=amd64
+
+      - name: Save logs
+        if: always()
+        uses: ./.github/actions/save-logs
+        with:
+          suffix: -validate-k3s
+
+  # Run the tests on kind
+  validate-kind:
+    runs-on: ubuntu-latest
+    needs: build-e2e
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
+        with:
+          name: build-artifacts
+          path: build/
+
+      - name: Setup golang
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Kind
+        run: |
+          kind delete cluster && kind create cluster
+          kubectl scale deploy -n kube-system coredns --replicas=1
+
+      - name: Make Zarf executable
+        run: |
+          chmod +x build/zarf
+
+      # Before we run the regular tests we need to aggressively cleanup files to reduce disk pressure
+      - name: Cleanup files
+        uses: ./.github/actions/cleanup-files
+
+      - name: Run tests
+        run: |
+          make test-e2e-with-cluster ARCH=amd64
+
+      - name: get cluster info
+        uses: ./.github/actions/debug-cluster
+        if: always()
+
+      - name: Save logs
+        if: always()
+        uses: ./.github/actions/save-logs
+        with:
+          suffix: -validate-kind
+
+  # Run the tests on minikube
+  validate-minikube:
+    runs-on: ubuntu-latest
+    needs: build-e2e
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
+        with:
+          name: build-artifacts
+          path: build/
+
+      - name: Setup golang
+        uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Minikube
+        run: minikube start --driver=docker
+
+      - name: Make Zarf executable
+        run: |
+          chmod +x build/zarf
+
+      # Before we run the regular tests we need to aggressively cleanup files to reduce disk pressure
+      - name: Cleanup files
+        uses: ./.github/actions/cleanup-files
+
+      - name: Run tests
+        run: |
+          make test-e2e-with-cluster ARCH=amd64
+
+      - name: get cluster info
+        uses: ./.github/actions/debug-cluster
+        if: always()
+
+      - name: Save logs
+        if: always()
+        uses: ./.github/actions/save-logs
+        with:
+          suffix: -validate-minikube

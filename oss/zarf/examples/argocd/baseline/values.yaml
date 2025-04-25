@@ -1,0 +1,20 @@
+redis-ha:
+  enabled: false
+
+dex:
+  enabled: false
+
+notifications:
+  enabled: false
+
+configs:
+  repositories:
+    github-podinfo:
+      name: podinfo
+      url: https://github.com/stefanprodan/podinfo.git
+      username: ""
+      password: ""
+
+redis:
+  image:
+    repository: docker.io/library/redis

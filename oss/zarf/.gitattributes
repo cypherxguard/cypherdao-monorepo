@@ -1,0 +1,9 @@
+* text eol=lf
+
+*.png binary
+*.jpg binary
+*.gif binary
+*.zst binary
+*.tar binary
+*.part00* binary
+*/blobs/sha256/* binary

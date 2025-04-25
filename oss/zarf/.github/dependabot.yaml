@@ -1,0 +1,30 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directories:
+      - "/"
+      - "/hack/schema"
+    schedule:
+      interval: daily
+    groups:
+      k8s:
+        patterns:
+          - "k8s.io/*"
+      cosign-providers:
+        patterns:
+          - "github.com/sigstore/sigstore/pkg/signature/kms/*"
+      golang:
+        patterns:
+          - "golang.org/x/*"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: daily
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: daily
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: daily
